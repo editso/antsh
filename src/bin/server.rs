@@ -1,6 +1,7 @@
 use rshell::{CommandWrite, CommandReader};
 
 fn main() {
+
     for rsh in rshell::listen("0.0.0.0", 9000) {
         for mut remote in rsh {
             while remote.is_live() {

@@ -12,7 +12,7 @@ pub struct SRemote(TcpStream, bool);
 
 
 #[derive(Serialize, Deserialize, Debug)]
-pub struct RCommand(usize);
+pub struct RCommand(usize, u8);
 
 pub trait CommandReader{
     fn read_command(&mut self)->  Option<String>;
@@ -24,12 +24,15 @@ pub trait CommandWrite{
 
 impl RCommand{
 
-    pub fn pack(data:&Vec<u8>)->Vec<u8>{
-        let mut ret = RCommand(data.len()).serialize();
+    pub fn pack(data: &Vec<u8>)->Vec<u8>{
+        let seq = max(data);
+        let mut ret = RCommand(data.len(), max(data)).serialize();
+
         if ret.len() != RCommand::size() {
             ret.resize(RCommand::size(), 0);
         }
-        ret.extend_from_slice(data);
+
+        ret.extend_from_slice(xor(seq, data).as_slice());
         ret
     }
 
@@ -140,6 +143,7 @@ impl CommandReader for SRemote{
     }
 }
 
+
 impl CommandWrite for SRemote{
     fn write_command(&mut self, command: String) -> Option<String> {
         match self.0.write(RCommand::pack(&Vec::from(command)).as_slice()) {
@@ -189,6 +193,7 @@ fn read_all(reader: &mut dyn Read)->Result<Vec<u8>, std::io::Error>{
     let mut size = 0;
     let mut is_rc = true;
     let mut buffer = vec![0; RCommand::size()];
+    let mut seq = 0;
 
     loop {
         match reader.read(&mut buffer[bytes..]) {
@@ -199,15 +204,14 @@ fn read_all(reader: &mut dyn Read)->Result<Vec<u8>, std::io::Error>{
                 bytes += n;
                 if is_rc && bytes == RCommand::size() {
                     let command = RCommand::deserialize(&buffer[..bytes].to_vec());
+                    seq = command.1;
                     size = command.0;
                     bytes = 0;
                     is_rc = false;
                     buffer.clear();
                     buffer.resize(size, 0);
                 }else if !is_rc && bytes == size{
-                    return Ok(buffer);
-                }else{
-                    return Ok(Vec::from(String::from("数据包损坏")))
+                    return Ok(xor(seq, &buffer));
                 }
             }
             Err(e) => {
@@ -216,6 +220,26 @@ fn read_all(reader: &mut dyn Read)->Result<Vec<u8>, std::io::Error>{
             }
         }
     }
+}
+
+pub fn max(data: &Vec<u8>)->u8{
+    let mut i:u8 = 255;
+    loop{
+        if data.contains(&i) {
+            return i;
+        }else{
+            i -= 1;
+        }
+    }
+}
+
+
+pub fn xor(seq: u8, data:& Vec<u8>)->Vec<u8>{
+    let mut tmp = Vec::new();
+    for code in data.iter() {
+        tmp.push(code ^ seq)
+    }
+    tmp
 }
 
 

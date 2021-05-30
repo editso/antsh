@@ -203,7 +203,7 @@ pub fn build_command()->Command{
         cmd.arg("/c");
         cmd
     }else{
-        let mut cmd = Command::new("/bin/sh");
+        let mut cmd = Command::new("/bin/bash");
         cmd.arg("-c");
         cmd
     }

@@ -31,7 +31,6 @@ fn main() {
                     };
 
                     remote.write_result(Vec::from(result));
-
                 }else if command.eq("exit") {
                     remote.exit();
                     drop(remote);
@@ -44,7 +43,10 @@ fn main() {
                             }else if !out.stderr.is_empty(){
                                 remote.write_result(out.stderr);
                             }else{
-                                remote.write_result(Vec::from("命令已执行, 但获取输出失败"))
+                                remote.write_result(Vec::from(format!("命令已执行, 但获取输出失败({}): {}", match out.status.code() {
+                                    None => {-1}
+                                    Some(n) => {n}
+                                }, &command)))
                             }
                         }
                         Err(e) => {

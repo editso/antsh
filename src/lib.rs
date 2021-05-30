@@ -12,8 +12,7 @@ pub struct SRemote(TcpStream, bool);
 
 
 #[derive(Serialize, Deserialize, Debug)]
-pub struct RCommand(usize, Vec<u8>);
-
+pub struct RCommand(usize);
 
 pub trait CommandReader{
     fn read_command(&mut self)->  Option<String>;
@@ -24,6 +23,20 @@ pub trait CommandWrite{
 }
 
 impl RCommand{
+
+    pub fn pack(data:&Vec<u8>)->Vec<u8>{
+        let mut ret = RCommand(data.len()).serialize();
+        if ret.len() != RCommand::size() {
+            ret.resize(RCommand::size(), 0);
+        }
+        ret.extend_from_slice(data);
+        ret
+    }
+
+    pub fn size()->usize{
+        std::mem::size_of::<RCommand>()
+    }
+
     pub fn serialize(&self) -> Vec<u8> {
        bincode::serialize(self).expect("无法序列化")
     }
@@ -40,8 +53,7 @@ impl CRemote{
     }
 
     pub fn write_result(&mut self, res: Vec<u8>){
-        let res = RCommand(res.len(), res).serialize();
-        if let Err(_e) = self.0.write(res.as_slice()) {
+        if let Err(_e) = self.0.write(RCommand::pack(&res).as_slice()) {
            self.1 = false;
         }
     }
@@ -52,7 +64,6 @@ impl CRemote{
         self.1 = false;
     }
 }
-
 
 impl SRemote{
     pub fn is_live(&self)->bool{
@@ -66,6 +77,7 @@ impl Iterator for CShell {
     fn next(&mut self) -> Option<Self::Item> {
         loop {
             if let Ok(connect) = TcpStream::connect(SocketAddr::from_str(format!("{}:{}", self.0, self.1).as_str()).unwrap()){
+                connect.set_nodelay(true).unwrap();
                 return Option::from(CRemote(connect, true));
             }
         }
@@ -79,6 +91,7 @@ impl Iterator for RShell{
         println!("等待连接....");
         for r in self.0.incoming() {
             if let Ok(connect) = r{
+                connect.set_nodelay(true).unwrap();
                 println!("已建立连接 {}", connect.peer_addr().unwrap());
                 return Some(SRemote(connect, true))
             }
@@ -92,9 +105,8 @@ impl CommandReader for CRemote{
     fn read_command(&mut self) -> Option<String> {
         loop {
             return match read_all(&mut self.0) {
-                Ok(command) => {
-                    let command = RCommand::deserialize(&command).1;
-                    Some(String::from_utf8(command).unwrap())
+                Ok(buffer) => {
+                    Some(String::from_utf8(buffer).unwrap())
                 }
                 Err(_e) => {
                     self.1 = false;
@@ -130,12 +142,11 @@ impl CommandReader for SRemote{
 
 impl CommandWrite for SRemote{
     fn write_command(&mut self, command: String) -> Option<String> {
-        let command = RCommand(command.len(), Vec::from(command));
-        match self.0.write(command.serialize().as_slice()) {
+        match self.0.write(RCommand::pack(&Vec::from(command)).as_slice()) {
             Ok(_n) => {
                 return match read_all(&mut self.0) {
                     Ok(buffer) => {
-                        Some(String::from_utf8_lossy(RCommand::deserialize(&buffer).1.as_slice()).to_string())
+                        Some(String::from_utf8_lossy(buffer.as_slice()).to_string())
                     }
                     Err(_e) => {
                         self.1 = false;
@@ -174,22 +185,33 @@ pub fn format_command(command: &str)->String{
 
 
 fn read_all(reader: &mut dyn Read)->Result<Vec<u8>, std::io::Error>{
-    let mut buffer = vec![0; 1024];
     let mut bytes = 0;
+    let mut size = 0;
+    let mut is_rc = true;
+    let mut buffer = vec![0; RCommand::size()];
+
     loop {
         match reader.read(&mut buffer[bytes..]) {
             Ok(n) if n == 0 => {
                 return Err(Error::new(ErrorKind::ConnectionReset, "连接被关闭"));
             },
-            Ok(n) if n < 1024 =>{
-                bytes += n;
-                return Ok(buffer[..bytes].to_vec())
-            }
             Ok(n) => {
                 bytes += n;
-                buffer.resize(bytes + 1024, 0)
+                if is_rc && bytes == RCommand::size() {
+                    let command = RCommand::deserialize(&buffer[..bytes].to_vec());
+                    size = command.0;
+                    bytes = 0;
+                    is_rc = false;
+                    buffer.clear();
+                    buffer.resize(size, 0);
+                }else if !is_rc && bytes == size{
+                    return Ok(buffer);
+                }else{
+                    return Ok(Vec::from(String::from("数据包损坏")))
+                }
             }
             Err(e) => {
+                println!("{:?}", e);
                 return Err(e)
             }
         }

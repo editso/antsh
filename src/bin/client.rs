@@ -6,6 +6,7 @@ use std::process::exit;
 
 fn main() {
     let args:Vec<String> = std::env::args().collect();
+    // "127.0.0.1", 9000
     for mut remote in rshell::shell(args.get(1).unwrap(), args.get(2).unwrap().parse().unwrap()){
         while remote.is_live() {
             if  let Some(mut command) = remote.read_command(){

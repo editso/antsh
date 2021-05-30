@@ -5,7 +5,8 @@ use std::env::{current_dir, set_current_dir};
 use std::process::exit;
 
 fn main() {
-    for mut remote in rshell::shell("127.0.0.1", 9000){
+    let args:Vec<String> = std::env::args().collect();
+    for mut remote in rshell::shell(args.get(1).unwrap(), args.get(2).unwrap().parse().unwrap()){
         while remote.is_live() {
             if  let Some(mut command) = remote.read_command(){
                 if command.trim_start().starts_with("cd ") {

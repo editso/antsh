@@ -76,19 +76,18 @@ impl Iterator for RShell{
 impl CommandReader for CRemote{
     fn read_command(&mut self) -> Option<String> {
         loop {
-            match read_all(&mut self.0) {
+            return match read_all(&mut self.0) {
                 Ok(command) => {
-                    return Some(String::from_utf8(command).unwrap())
+                    Some(String::from_utf8(command).unwrap())
                 }
                 Err(_e) => {
                     self.1 = false;
-                    return None
+                    None
                 }
             }
         }
     }
 }
-
 
 impl CommandReader for SRemote{
     fn read_command(&mut self) -> Option<String> {
@@ -112,24 +111,6 @@ impl CommandReader for SRemote{
         None
     }
 }
-
-
-impl Iterator for CRemote {
-    type Item = String;
-
-    fn next(&mut self) -> Option<Self::Item> {
-        self.read_command()
-    }
-}
-
-impl Iterator for SRemote {
-    type Item = String;
-
-    fn next(&mut self) -> Option<Self::Item> {
-        self.read_command()
-    }
-}
-
 
 impl CommandWrite for SRemote{
     fn write_command(&mut self, command: String) -> Option<String> {
@@ -155,7 +136,7 @@ impl CommandWrite for SRemote{
 
 
 pub fn format_command(command: &str)->String{
-    let command = command.trim_start().trim_end();
+    let command = command.trim_start().trim_end().replace("\n", "");
     let mut buffer = String::new();
     let mut c = 0;
     for chr in command.chars(){
@@ -163,7 +144,8 @@ pub fn format_command(command: &str)->String{
             c += 1;
             continue
         }
-        if c > 1{
+
+        if c > 1 || c == 1{
             buffer.push(' ');
             c = 0;
         }
@@ -174,7 +156,7 @@ pub fn format_command(command: &str)->String{
 }
 
 
-pub fn read_all(reader: &mut dyn Read)->Result<Vec<u8>, std::io::Error>{
+fn read_all(reader: &mut dyn Read)->Result<Vec<u8>, std::io::Error>{
     let mut buffer = vec![0; 4096];
     let mut bytes = 0;
     loop {

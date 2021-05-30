@@ -37,10 +37,15 @@ fn main() {
                     drop(remote);
                     exit(0);
                 } else{
-                    match rshell::build_command().arg(command).output() {
+                    match rshell::build_command().arg(&command).output() {
                         Ok(out) => {
-                            remote.write_result(out.stdout);
-                            remote.write_result(out.stderr);
+                            if !out.stdout.is_empty(){
+                                remote.write_result(out.stdout);
+                            }else if !out.stderr.is_empty(){
+                                remote.write_result(out.stderr);
+                            }else{
+                                remote.write_result(Vec::from("命令已执行, 但获取输出失败"))
+                            }
                         }
                         Err(e) => {
                             remote.write_result(Vec::from(e.to_string()));

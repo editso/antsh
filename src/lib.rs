@@ -181,7 +181,7 @@ fn read_all(reader: &mut dyn Read)->Result<Vec<u8>, std::io::Error>{
 
 pub fn build_command()->Command{
     if cfg!(linux) {
-        let mut cmd = Command::new("sh");
+        let mut cmd = Command::new("/bin/sh");
         cmd.arg("-c");
         cmd
     }else{

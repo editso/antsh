@@ -8,10 +8,12 @@ use std::process::exit;
 use std::sync::mpsc::{channel, RecvTimeoutError};
 use std::time::Duration;
 
-
 fn main() {
     let args: Vec<String> = std::env::args().collect();
-
+    if args.len() < 3 {
+        println!("用法: {} host port", args.get(0).unwrap());
+        exit(0);
+    }
     // "127.0.0.1", 9000
     for mut remote in rshell::shell(args.get(1).unwrap(), args.get(2).unwrap().parse().unwrap()) {
         while remote.is_live() {

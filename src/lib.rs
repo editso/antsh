@@ -76,6 +76,12 @@ impl SRemote {
     pub fn is_live(&self) -> bool {
         self.1
     }
+
+    #[allow(unused_must_use)]
+    pub fn exit(&mut self) {
+        self.0.shutdown(Shutdown::Both);
+        self.1 = false;
+    }
 }
 
 impl Iterator for CShell {

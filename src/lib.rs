@@ -1,3 +1,5 @@
+pub mod crypt;
+
 use std::net::{TcpStream, SocketAddr, TcpListener, Shutdown};
 use std::io::{Read, Write, Error, ErrorKind};
 use std::str::FromStr;
@@ -5,7 +7,6 @@ use std::process::Command;
 use serde::{Serialize, Deserialize};
 use std::time::Duration;
 use std::sync::mpsc::{RecvTimeoutError, channel};
-
 
 pub struct CShell(String, u16);
 

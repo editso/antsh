@@ -51,7 +51,22 @@ impl<T: AsyncWrite + Unpin + Send + Sync + 'static> AsyncWrite for XorCrypt<T> {
         cx: &mut std::task::Context<'_>,
         buf: &[u8],
     ) -> std::task::Poll<std::io::Result<usize>> {
-        let buf: Vec<u8> = buf.iter().map(|ele| ele ^ self.key).collect();
+        let buf: Vec<u8> = if cfg!(windows) {
+            if buf.ends_with("\r\n".as_bytes()) {
+                let mut buf = buf.to_vec();
+                buf.truncate(buf.len() - 2);
+                buf.extend("\n".as_bytes());
+                buf.to_vec()
+            } else {
+                buf.to_vec()
+            }
+        } else {
+            buf.to_vec()
+        }
+        .iter()
+        .map(|ele| ele ^ self.key)
+        .collect();
+
         let mut io = self.inner.lock().unwrap();
         std::pin::Pin::new(&mut *io).poll_write(cx, &buf)
     }

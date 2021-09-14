@@ -18,7 +18,7 @@ pub struct SRemote(TcpStream, bool);
 
 
 #[derive(Serialize, Deserialize, Debug)]
-pub struct RCommand(usize, u8);
+pub struct RCommand(u32, u8);
 
 pub trait CommandReader {
     fn read_command(&mut self) -> Option<String>;
@@ -31,7 +31,7 @@ pub trait CommandWrite {
 impl RCommand {
     pub fn pack(data: &Vec<u8>) -> Vec<u8> {
         let seq = max(data);
-        let mut ret = RCommand(data.len(), max(data)).serialize();
+        let mut ret = RCommand(data.len() as u32, max(data)).serialize();
 
         if ret.len() != RCommand::size() {
             ret.resize(RCommand::size(), 0);
@@ -139,6 +139,7 @@ impl CommandReader for SRemote {
             std::io::stdout().flush().unwrap();
             let mut command = String::new();
             if let Ok(_) = std::io::stdin().read_line(&mut command) {
+
                 let command = format_command(&command);
                 if !command.is_empty() {
                     return Some(command)
@@ -215,8 +216,8 @@ fn read_all(reader: &mut dyn Read) -> Result<Vec<u8>, std::io::Error> {
                     bytes = 0;
                     is_rc = false;
                     buffer.clear();
-                    buffer.resize(size, 0);
-                } else if !is_rc && bytes == size {
+                    buffer.resize(size as usize, 0);
+                } else if !is_rc && bytes == size as usize {
                     return Ok(xor(seq, &buffer));
                 }
             }

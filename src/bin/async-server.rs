@@ -1,5 +1,4 @@
 use std::{
-    io::Write,
     process::exit,
     sync::{Arc, Mutex},
 };
@@ -29,7 +28,6 @@ impl<T: AsyncRead + Unpin + Sync + Send + 'static> AsyncRead for Input<T> {
         std::pin::Pin::new(&mut *io).poll_read(cx, buf)
     }
 }
-
 
 fn main() {
     let args: Vec<String> = std::env::args().collect();
